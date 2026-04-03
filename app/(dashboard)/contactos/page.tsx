@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -12,7 +13,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useContacts } from "@/lib/store/hooks"
 import {
   UserPlus,
   Search,
@@ -25,38 +40,9 @@ import {
   Swords,
   Handshake,
   Truck,
+  Trash2,
 } from "lucide-react"
-
-// ---------------------------------------------------------------------------
-// Mock Data
-// ---------------------------------------------------------------------------
-
-interface MockContact {
-  id: string
-  name: string
-  entity: string
-  position: string
-  type: "funcionario" | "competidor" | "proveedor" | "aliado"
-  email: string
-  phone: string
-  tags: string[]
-  notes: string
-}
-
-const mockContacts: MockContact[] = [
-  { id: "1", name: "Lic. Carlos Eduardo Ramirez Gutierrez", entity: "IMSS - Direccion de Adquisiciones", position: "Director de Area", type: "funcionario", email: "carlos.ramirez@imss.gob.mx", phone: "+52 55 5238 1700", tags: ["salud", "adquisiciones"], notes: "Contacto principal para licitaciones de equipo medico. Reuniones los martes." },
-  { id: "2", name: "Ing. Alejandra Martinez Soto", entity: "CFE - Unidad de Compras", position: "Subdirectora de Contrataciones", type: "funcionario", email: "alejandra.martinez@cfe.mx", phone: "+52 55 5229 4400", tags: ["energia", "servicios"], notes: "Responsable de contratos de servicios generales." },
-  { id: "3", name: "Lic. Roberto Fernandez Diaz", entity: "Soluciones Integrales del Norte SA de CV", position: "Director General", type: "competidor", email: "rfernandez@sinorte.com.mx", phone: "+52 81 8342 5500", tags: ["TI", "gobierno"], notes: "Competidor fuerte en licitaciones de TI. Base en Monterrey." },
-  { id: "4", name: "Ing. Patricia Hernandez Vega", entity: "Grupo Tecnologico Peninsular SA de CV", position: "Gerente Comercial", type: "competidor", email: "phernandez@gtpeninsular.com", phone: "+52 99 9920 1234", tags: ["software", "gobierno"], notes: "Especialistas en software gubernamental. Operan en sureste." },
-  { id: "5", name: "C.P. Fernando Lopez Castillo", entity: "Distribuidora Medica del Centro SA de CV", position: "Director Comercial", type: "proveedor", email: "flopez@dismec.com.mx", phone: "+52 55 5678 9012", tags: ["equipo medico", "insumos"], notes: "Proveedor principal de equipo medico. Precios competitivos." },
-  { id: "6", name: "Ing. Maria del Carmen Ortiz Ruiz", entity: "PEMEX - Gerencia de Contrataciones", position: "Gerente de Contrataciones", type: "funcionario", email: "mcarmen.ortiz@pemex.com", phone: "+52 55 1944 2500", tags: ["energia", "infraestructura"], notes: "Encargada de licitaciones de infraestructura tecnologica." },
-  { id: "7", name: "Lic. Juan Pablo Moreno Silva", entity: "Consultores Asociados Bajio SC", position: "Socio Director", type: "aliado", email: "jpmoreno@cabajio.com", phone: "+52 47 7712 3456", tags: ["legal", "consultorias"], notes: "Aliado para consultorias legales. Experto en derecho administrativo." },
-  { id: "8", name: "Ing. Ana Gabriela Torres Mendez", entity: "TechSolutions Mexico SA de CV", position: "CTO", type: "aliado", email: "atorres@techsolutions.mx", phone: "+52 33 3615 7890", tags: ["TI", "desarrollo"], notes: "Partner tecnologico para proyectos de desarrollo de software." },
-  { id: "9", name: "C.P. Ricardo Salinas Pliego Jr.", entity: "Infraestructura y Servicios Globales SA de CV", position: "Director de Licitaciones", type: "competidor", email: "rsalinas@isglobal.com.mx", phone: "+52 55 5432 1098", tags: ["infraestructura", "servicios"], notes: "Competidor en servicios de infraestructura. Empresa grande con multiples contratos." },
-  { id: "10", name: "Dra. Lucia Esperanza Garcia Navarro", entity: "SAT - Administracion General de Recursos", position: "Administradora de Recursos Materiales", type: "funcionario", email: "lucia.garcia@sat.gob.mx", phone: "+52 55 6272 2728", tags: ["fiscal", "TI"], notes: "Responsable de contrataciones de TI en el SAT." },
-  { id: "11", name: "Ing. Miguel Angel Reyes Dominguez", entity: "Suministros Industriales del Pacifico SA de CV", position: "Gerente de Ventas", type: "proveedor", email: "mareyes@sipac.com.mx", phone: "+52 66 9985 4321", tags: ["industrial", "suministros"], notes: "Proveedor de suministros industriales con cobertura nacional." },
-  { id: "12", name: "Lic. Sofia Valentina Cruz Espinoza", entity: "Deloitte Mexico", position: "Senior Manager - Government", type: "aliado", email: "svcruz@deloitte.com", phone: "+52 55 5080 6000", tags: ["consultoria", "gobierno"], notes: "Aliada para proyectos de consultoria gubernamental de alto perfil." },
-]
+import type { ContactType } from "@/types"
 
 const typeConfig: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   funcionario: { label: "Funcionario", icon: <Building2 className="h-3.5 w-3.5" />, color: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
@@ -74,18 +60,58 @@ const filterTabs = [
 ]
 
 export default function ContactosPage() {
+  const { contacts, loaded, addContact, deleteContact } = useContacts()
   const [search, setSearch] = useState("")
   const [activeFilter, setActiveFilter] = useState("todos")
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
 
-  const filtered = mockContacts.filter((c) => {
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [newName, setNewName] = useState("")
+  const [newEntity, setNewEntity] = useState("")
+  const [newPosition, setNewPosition] = useState("")
+  const [newType, setNewType] = useState<ContactType>("funcionario")
+  const [newEmail, setNewEmail] = useState("")
+  const [newPhone, setNewPhone] = useState("")
+  const [newTags, setNewTags] = useState("")
+
+  const filtered = contacts.filter((c) => {
     const matchesType = activeFilter === "todos" || c.type === activeFilter
     const matchesSearch =
       c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.entity.toLowerCase().includes(search.toLowerCase()) ||
-      c.position.toLowerCase().includes(search.toLowerCase())
+      (c.entity || "").toLowerCase().includes(search.toLowerCase()) ||
+      (c.position || "").toLowerCase().includes(search.toLowerCase())
     return matchesType && matchesSearch
   })
+
+  const handleCreate = () => {
+    if (!newName.trim()) return
+    addContact({
+      name: newName.trim(),
+      entity: newEntity.trim() || null,
+      position: newPosition.trim() || null,
+      type: newType,
+      email: newEmail.trim() || null,
+      phone: newPhone.trim() || null,
+      tags: newTags.split(",").map((t) => t.trim()).filter(Boolean),
+      notes: null,
+    })
+    setDialogOpen(false)
+    setNewName("")
+    setNewEntity("")
+    setNewPosition("")
+    setNewType("funcionario")
+    setNewEmail("")
+    setNewPhone("")
+    setNewTags("")
+  }
+
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    deleteContact(id)
+  }
+
+  if (!loaded) return null
 
   return (
     <div className="space-y-8">
@@ -97,7 +123,7 @@ export default function ContactosPage() {
             Directorio de funcionarios, competidores, proveedores y aliados estrategicos.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setDialogOpen(true)}>
           <UserPlus className="mr-2 h-4 w-4" />
           Nuevo Contacto
         </Button>
@@ -121,7 +147,7 @@ export default function ContactosPage() {
               {tab.label}
               {tab.value !== "todos" && (
                 <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px]">
-                  {mockContacts.filter((c) => c.type === tab.value).length}
+                  {contacts.filter((c) => c.type === tab.value).length}
                 </span>
               )}
             </button>
@@ -150,7 +176,7 @@ export default function ContactosPage() {
               <TableHead className="text-muted-foreground">Email</TableHead>
               <TableHead className="text-muted-foreground">Telefono</TableHead>
               <TableHead className="text-muted-foreground">Tags</TableHead>
-              <TableHead className="w-8" />
+              <TableHead className="w-16" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -158,64 +184,56 @@ export default function ContactosPage() {
               const config = typeConfig[contact.type]
               const isExpanded = expandedRow === contact.id
               return (
-                <>
-                  <TableRow
-                    key={contact.id}
-                    className={cn(
-                      "cursor-pointer border-border/50 transition-colors",
-                      isExpanded && "bg-muted/30"
-                    )}
-                    onClick={() => setExpandedRow(isExpanded ? null : contact.id)}
-                  >
-                    <TableCell className="font-medium text-foreground text-sm">{contact.name}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{contact.entity}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{contact.position}</TableCell>
-                    <TableCell>
-                      <Badge className={cn("border text-[10px] gap-1", config.color)}>
-                        {config.icon}
-                        {config.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+                <TableRow
+                  key={contact.id}
+                  className={cn("cursor-pointer border-border/50 transition-colors", isExpanded && "bg-muted/30")}
+                  onClick={() => setExpandedRow(isExpanded ? null : contact.id)}
+                >
+                  <TableCell className="font-medium text-foreground text-sm">{contact.name}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{contact.entity}</TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{contact.position}</TableCell>
+                  <TableCell>
+                    <Badge className={cn("border text-[10px] gap-1", config.color)}>
+                      {config.icon}
+                      {config.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {contact.email && (
+                      <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors" onClick={(e) => e.stopPropagation()}>
                         <Mail className="h-3 w-3" />
                         {contact.email}
                       </a>
-                    </TableCell>
-                    <TableCell>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {contact.phone && (
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Phone className="h-3 w-3" />
                         {contact.phone}
                       </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {contact.tags.map((tag) => (
-                          <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {isExpanded ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                      )}
-                    </TableCell>
-                  </TableRow>
-                  {isExpanded && (
-                    <TableRow key={`${contact.id}-detail`} className="border-border/50 bg-muted/20 hover:bg-muted/20">
-                      <TableCell colSpan={8} className="py-3">
-                        <div className="text-xs text-muted-foreground pl-2">
-                          <span className="font-medium text-foreground">Notas: </span>
-                          {contact.notes}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {contact.tags.map((tag) => (
+                        <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{tag}</span>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => handleDelete(contact.id, e)}
+                        className="rounded p-1 text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                      {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                    </div>
+                  </TableCell>
+                </TableRow>
               )
             })}
           </TableBody>
@@ -227,6 +245,61 @@ export default function ContactosPage() {
           </div>
         )}
       </div>
+
+      {/* Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo Contacto</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Nombre *</Label>
+              <Input placeholder="Nombre completo" value={newName} onChange={(e) => setNewName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Entidad</Label>
+                <Input placeholder="Empresa u organizacion" value={newEntity} onChange={(e) => setNewEntity(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Cargo</Label>
+                <Input placeholder="Puesto o cargo" value={newPosition} onChange={(e) => setNewPosition(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo</Label>
+              <Select value={newType} onValueChange={(v) => setNewType(v as ContactType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="funcionario">Funcionario</SelectItem>
+                  <SelectItem value="competidor">Competidor</SelectItem>
+                  <SelectItem value="proveedor">Proveedor</SelectItem>
+                  <SelectItem value="aliado">Aliado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" placeholder="email@ejemplo.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefono</Label>
+                <Input placeholder="+52 55 1234 5678" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Tags (separados por coma)</Label>
+              <Input placeholder="gobierno, TI, salud" value={newTags} onChange={(e) => setNewTags(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreate} disabled={!newName.trim()}>Crear Contacto</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

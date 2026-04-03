@@ -2,7 +2,7 @@
 
 import { useMemo } from "react"
 import { KanbanBoard } from "@/components/pipeline/kanban-board"
-import { mockBids } from "@/lib/data/mock-data"
+import { useBids } from "@/lib/store/hooks"
 import { getStageLabel, getStageDotColor, cn } from "@/lib/utils"
 import { Kanban } from "lucide-react"
 import type { PipelineStage } from "@/types"
@@ -16,23 +16,26 @@ const ACTIVE_STAGES: PipelineStage[] = [
   "en_evaluacion",
 ]
 
-// Simple mock user name lookup
 const USER_NAMES: Record<string, string> = {
   "user-mock-001": "Carlos Mendoza",
 }
 
 export default function PipelinePage() {
+  const { bids, loaded, addBid, moveBidStage } = useBids()
+
   const stageCounts = useMemo(() => {
     const counts: Partial<Record<PipelineStage, number>> = {}
-    for (const bid of mockBids) {
+    for (const bid of bids) {
       counts[bid.pipeline_stage] = (counts[bid.pipeline_stage] || 0) + 1
     }
     return counts
-  }, [])
+  }, [bids])
 
-  const activeBids = mockBids.filter((b) =>
+  const activeBids = bids.filter((b) =>
     !["ganada", "perdida", "desierta", "descartada"].includes(b.pipeline_stage)
   )
+
+  if (!loaded) return null
 
   return (
     <div className="flex flex-col gap-5">
@@ -73,7 +76,7 @@ export default function PipelinePage() {
       </div>
 
       {/* Kanban board */}
-      <KanbanBoard bids={mockBids} userNames={USER_NAMES} />
+      <KanbanBoard bids={bids} userNames={USER_NAMES} onAddBid={addBid} onMoveBid={moveBidStage} />
     </div>
   )
 }

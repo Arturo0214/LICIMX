@@ -13,10 +13,11 @@ import {
   getUrgencyColor,
   getBidTypeLabel,
 } from "@/lib/utils"
-import { mockBids } from "@/lib/data/mock-data"
+import { useBids } from "@/lib/store/hooks"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -24,6 +25,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   FileText,
   Plus,
@@ -63,6 +70,8 @@ const PER_PAGE = 10
 type SortKey = "title" | "estimated_amount" | "total_score" | "proposal_deadline"
 
 export default function LicitacionesPage() {
+  const { bids, loaded, addBid } = useBids()
+
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("todas")
   const [typeFilter, setTypeFilter] = useState("todos")
@@ -70,8 +79,17 @@ export default function LicitacionesPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
   const [page, setPage] = useState(1)
 
+  // Dialog state
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [newTitle, setNewTitle] = useState("")
+  const [newEntity, setNewEntity] = useState("")
+  const [newType, setNewType] = useState<BidType>("publica")
+  const [newAmount, setNewAmount] = useState("")
+  const [newSector, setNewSector] = useState("")
+  const [newDeadline, setNewDeadline] = useState("")
+
   const filtered = useMemo(() => {
-    let result = [...mockBids]
+    let result = [...bids]
 
     if (search) {
       const q = search.toLowerCase()
@@ -119,7 +137,7 @@ export default function LicitacionesPage() {
     })
 
     return result
-  }, [search, stageFilter, typeFilter, sortKey, sortDir])
+  }, [bids, search, stageFilter, typeFilter, sortKey, sortDir])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
@@ -149,6 +167,53 @@ export default function LicitacionesPage() {
     )
   }
 
+  const handleCreate = () => {
+    if (!newTitle.trim() || !newEntity.trim()) return
+    addBid({
+      title: newTitle.trim(),
+      contracting_entity: newEntity.trim(),
+      bid_type: newType,
+      pipeline_stage: 'detectada' as PipelineStage,
+      procedure_number: `LA-${Date.now().toString().slice(-9)}-2026`,
+      estimated_amount: newAmount ? Number(newAmount) : null,
+      currency: 'MXN',
+      description: null,
+      buying_unit: null,
+      minimum_amount: null,
+      maximum_amount: null,
+      guarantee_amount: null,
+      total_score: null,
+      score_level: null,
+      auto_discarded: false,
+      published_at: new Date().toISOString(),
+      clarification_meeting_at: null,
+      proposal_deadline: newDeadline ? new Date(newDeadline).toISOString() : null,
+      technical_opening_at: null,
+      economic_opening_at: null,
+      ruling_date: null,
+      contract_start_date: null,
+      contract_end_date: null,
+      tags: newSector ? [newSector] : [],
+      assigned_user_id: null,
+      result: null,
+      awarded_amount: null,
+      winner_name: null,
+      source_url: null,
+      source_portal: null,
+      notes: null,
+      metadata: null,
+    } as Omit<Bid, 'id' | 'organization_id' | 'created_at' | 'updated_at'>)
+    setDialogOpen(false)
+    setNewTitle("")
+    setNewEntity("")
+    setNewType("publica")
+    setNewAmount("")
+    setNewSector("")
+    setNewDeadline("")
+  }
+
+  if (!loaded) return null
+
   return (
     <div className="flex flex-col gap-5">
       {/* Header */}
@@ -164,7 +229,7 @@ export default function LicitacionesPage() {
             </p>
           </div>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           Nueva Licitacion
         </Button>
@@ -380,6 +445,56 @@ export default function LicitacionesPage() {
           </Button>
         </div>
       </div>
+
+      {/* Create Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva Licitacion</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Titulo *</Label>
+              <Input placeholder="Nombre de la licitacion" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Dependencia *</Label>
+              <Input placeholder="Entidad contratante" value={newEntity} onChange={(e) => setNewEntity(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tipo</Label>
+                <Select value={newType} onValueChange={(v) => setNewType(v as BidType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="publica">Publica</SelectItem>
+                    <SelectItem value="invitacion">Invitacion a 3</SelectItem>
+                    <SelectItem value="adjudicacion_directa">Adj. Directa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Monto estimado (MXN)</Label>
+                <Input type="number" placeholder="0" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Sector</Label>
+                <Input placeholder="ej. tecnologia" value={newSector} onChange={(e) => setNewSector(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Fecha limite</Label>
+                <Input type="date" value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreate} disabled={!newTitle.trim() || !newEntity.trim()}>Crear</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

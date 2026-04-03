@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { getStageDotColor } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -13,11 +14,33 @@ interface KanbanColumnProps {
   label: string
   bids: Bid[]
   getUserName: (id: string | null | undefined) => string | undefined
+  onAdd: () => void
+  onDragStart: (bidId: string) => void
+  onDrop: () => void
+  onDragEnd: () => void
+  isDragOver: boolean
 }
 
-export function KanbanColumn({ stage, label, bids, getUserName }: KanbanColumnProps) {
+export function KanbanColumn({ stage, label, bids, getUserName, onAdd, onDragStart, onDrop, onDragEnd }: KanbanColumnProps) {
+  const [dragOver, setDragOver] = useState(false)
+
   return (
-    <div className="flex min-w-[290px] max-w-[290px] flex-col rounded-xl bg-muted/30 border border-border/40">
+    <div
+      className={cn(
+        "flex min-w-[290px] max-w-[290px] flex-col rounded-xl bg-muted/30 border border-border/40 transition-colors",
+        dragOver && "border-primary/50 bg-primary/5"
+      )}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragOver(true)
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDragOver(false)
+        onDrop()
+      }}
+    >
       {/* Header */}
       <div className="flex items-center gap-2.5 px-3.5 py-3">
         <div className={cn("h-2.5 w-2.5 rounded-full", getStageDotColor(stage))} />
@@ -35,6 +58,8 @@ export function KanbanColumn({ stage, label, bids, getUserName }: KanbanColumnPr
               key={bid.id}
               bid={bid}
               assignedUserName={getUserName(bid.assigned_user_id)}
+              onDragStart={() => onDragStart(bid.id)}
+              onDragEnd={onDragEnd}
             />
           ))}
         </div>
@@ -46,6 +71,7 @@ export function KanbanColumn({ stage, label, bids, getUserName }: KanbanColumnPr
           variant="ghost"
           size="sm"
           className="w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground"
+          onClick={onAdd}
         >
           <Plus className="h-3.5 w-3.5" />
           Agregar licitacion

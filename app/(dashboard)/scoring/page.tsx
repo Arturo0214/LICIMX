@@ -1,14 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
+import { getStored, setStored, STORAGE_KEYS } from "@/lib/store/index"
 import {
   Target, RotateCcw, Save, Zap, ShieldAlert, TrendingUp, Scale,
   FileCheck, Users, Clock, DollarSign, Building2, AlertTriangle, ChevronRight,
+  CheckCircle2,
 } from "lucide-react"
 
 interface ScoringVariable { id: string; name: string; description: string; defaultWeight: number; icon: React.ReactNode }
@@ -56,6 +58,16 @@ export default function ScoringPage() {
     Object.fromEntries(defaultVariables.map((v) => [v.id, v.defaultWeight]))
   )
   const [discardRules, setDiscardRules] = useState<DiscardRule[]>(defaultDiscardRules)
+  const [saved, setSaved] = useState(false)
+
+  // Load from localStorage on mount
+  useEffect(() => {
+    const storedWeights = getStored<Record<string, number> | null>(STORAGE_KEYS.SCORING_WEIGHTS, null)
+    if (storedWeights) setWeights(storedWeights)
+
+    const storedRules = getStored<DiscardRule[] | null>(STORAGE_KEYS.SCORING_DISCARD_RULES, null)
+    if (storedRules) setDiscardRules(storedRules)
+  }, [])
 
   const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0)
 
@@ -64,12 +76,26 @@ export default function ScoringPage() {
   }
 
   const handleRestore = () => {
-    setWeights(Object.fromEntries(defaultVariables.map((v) => [v.id, v.defaultWeight])))
+    const defaultW = Object.fromEntries(defaultVariables.map((v) => [v.id, v.defaultWeight]))
+    setWeights(defaultW)
     setDiscardRules(defaultDiscardRules)
+    setStored(STORAGE_KEYS.SCORING_WEIGHTS, defaultW)
+    setStored(STORAGE_KEYS.SCORING_DISCARD_RULES, defaultDiscardRules)
+  }
+
+  const handleSave = () => {
+    setStored(STORAGE_KEYS.SCORING_WEIGHTS, weights)
+    setStored(STORAGE_KEYS.SCORING_DISCARD_RULES, discardRules)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
   }
 
   const toggleRule = (id: string) => {
-    setDiscardRules((prev) => prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)))
+    setDiscardRules((prev) => {
+      const next = prev.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r))
+      setStored(STORAGE_KEYS.SCORING_DISCARD_RULES, next)
+      return next
+    })
   }
 
   const simulatedScore = Math.round(
@@ -137,9 +163,23 @@ export default function ScoringPage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-3">
-            <Button><Save className="mr-2 h-4 w-4" />Guardar Configuracion</Button>
-            <Button variant="outline" onClick={handleRestore}><RotateCcw className="mr-2 h-4 w-4" />Restaurar Defaults</Button>
+          <div className="flex items-center gap-3">
+            <Button onClick={handleSave} disabled={totalWeight !== 100}>
+              <Save className="mr-2 h-4 w-4" />
+              Guardar Configuracion
+            </Button>
+            <Button variant="outline" onClick={handleRestore}>
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Restaurar Defaults
+            </Button>
+            {saved && (
+              <span className="flex items-center gap-1 text-sm text-success">
+                <CheckCircle2 className="h-4 w-4" /> Guardado
+              </span>
+            )}
+            {totalWeight !== 100 && (
+              <span className="text-sm text-destructive">Los pesos deben sumar exactamente 100</span>
+            )}
           </div>
         </div>
 

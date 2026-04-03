@@ -5,6 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import { useUser } from "@/lib/auth/hooks"
 import {
   Shield,
   LayoutDashboard,
@@ -75,6 +76,17 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
+  const { user } = useUser()
+
+  const userName = user?.name || "Usuario"
+  const userCompany = user?.company || "Mi Empresa"
+  const userInitials = userName
+    .split(" ")
+    .filter(Boolean)
+    .map((w: string) => w[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase() || "US"
 
   // Load collapsed state from localStorage
   useEffect(() => {
@@ -206,13 +218,13 @@ export function Sidebar() {
               className="mb-3 flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-2"
             >
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 text-xs font-bold text-slate-300">
-                MX
+                {userInitials}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-slate-200">
-                  Mi Empresa
+                  {userCompany}
                 </p>
-                <p className="text-[10px] text-slate-600">Plan Pro</p>
+                <p className="truncate text-[10px] text-slate-600">{userName}</p>
               </div>
               <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
                 PRO

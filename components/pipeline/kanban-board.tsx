@@ -6,6 +6,7 @@ import { getStageLabel } from "@/lib/utils"
 import { KanbanColumn } from "@/components/pipeline/kanban-column"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -13,8 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Search, SlidersHorizontal } from "lucide-react"
-import type { Bid, PipelineStage } from "@/types"
+import type { Bid, PipelineStage, BidType } from "@/types"
 
 const KANBAN_STAGES: PipelineStage[] = [
   "detectada",
@@ -40,17 +47,29 @@ const SECTORS = [
 interface KanbanBoardProps {
   bids: Bid[]
   userNames: Record<string, string>
+  onAddBid: (bid: Omit<Bid, 'id' | 'organization_id' | 'created_at' | 'updated_at'>) => Bid
+  onMoveBid: (id: string, stage: PipelineStage) => void
 }
 
-export function KanbanBoard({ bids, userNames }: KanbanBoardProps) {
+export function KanbanBoard({ bids, userNames, onAddBid, onMoveBid }: KanbanBoardProps) {
   const [search, setSearch] = useState("")
   const [sectorFilter, setSectorFilter] = useState("todos")
   const [scoreFilter, setScoreFilter] = useState("todos")
   const [showFilters, setShowFilters] = useState(false)
 
+  // Add bid dialog state
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogStage, setDialogStage] = useState<PipelineStage>("detectada")
+  const [newTitle, setNewTitle] = useState("")
+  const [newEntity, setNewEntity] = useState("")
+  const [newType, setNewType] = useState<BidType>("publica")
+  const [newAmount, setNewAmount] = useState("")
+
+  // Drag state
+  const [draggedBidId, setDraggedBidId] = useState<string | null>(null)
+
   const filteredBids = useMemo(() => {
     return bids.filter((bid) => {
-      // Text search
       if (search) {
         const q = search.toLowerCase()
         const matches =
@@ -60,7 +79,6 @@ export function KanbanBoard({ bids, userNames }: KanbanBoardProps) {
         if (!matches) return false
       }
 
-      // Sector filter
       if (sectorFilter !== "todos") {
         const hasSector = bid.tags?.some((t) =>
           t.toLowerCase().includes(sectorFilter.toLowerCase())
@@ -68,7 +86,6 @@ export function KanbanBoard({ bids, userNames }: KanbanBoardProps) {
         if (!hasSector) return false
       }
 
-      // Score filter
       if (scoreFilter === "alta" && (bid.total_score == null || bid.total_score < 75)) return false
       if (scoreFilter === "media" && (bid.total_score == null || bid.total_score < 50 || bid.total_score >= 75)) return false
       if (scoreFilter === "baja" && (bid.total_score == null || bid.total_score >= 50)) return false
@@ -93,6 +110,69 @@ export function KanbanBoard({ bids, userNames }: KanbanBoardProps) {
   const getUserName = (id: string | null | undefined): string | undefined => {
     if (!id) return undefined
     return userNames[id]
+  }
+
+  const handleOpenAddDialog = (stage: PipelineStage) => {
+    setDialogStage(stage)
+    setNewTitle("")
+    setNewEntity("")
+    setNewType("publica")
+    setNewAmount("")
+    setDialogOpen(true)
+  }
+
+  const handleCreateBid = () => {
+    if (!newTitle.trim() || !newEntity.trim()) return
+    onAddBid({
+      title: newTitle.trim(),
+      contracting_entity: newEntity.trim(),
+      bid_type: newType,
+      pipeline_stage: dialogStage,
+      procedure_number: `LA-${Date.now().toString().slice(-9)}-2026`,
+      estimated_amount: newAmount ? Number(newAmount) : null,
+      currency: 'MXN',
+      description: null,
+      buying_unit: null,
+      minimum_amount: null,
+      maximum_amount: null,
+      guarantee_amount: null,
+      total_score: null,
+      score_level: null,
+      auto_discarded: false,
+      published_at: new Date().toISOString(),
+      clarification_meeting_at: null,
+      proposal_deadline: null,
+      technical_opening_at: null,
+      economic_opening_at: null,
+      ruling_date: null,
+      contract_start_date: null,
+      contract_end_date: null,
+      tags: [],
+      assigned_user_id: null,
+      result: null,
+      awarded_amount: null,
+      winner_name: null,
+      source_url: null,
+      source_portal: null,
+      notes: null,
+      metadata: null,
+    })
+    setDialogOpen(false)
+  }
+
+  const handleDragStart = (bidId: string) => {
+    setDraggedBidId(bidId)
+  }
+
+  const handleDrop = (stage: PipelineStage) => {
+    if (draggedBidId) {
+      onMoveBid(draggedBidId, stage)
+      setDraggedBidId(null)
+    }
+  }
+
+  const handleDragEnd = () => {
+    setDraggedBidId(null)
   }
 
   return (
@@ -161,9 +241,71 @@ export function KanbanBoard({ bids, userNames }: KanbanBoardProps) {
             label={getStageLabel(stage)}
             bids={bidsByStage[stage] || []}
             getUserName={getUserName}
+            onAdd={() => handleOpenAddDialog(stage)}
+            onDragStart={handleDragStart}
+            onDrop={() => handleDrop(stage)}
+            onDragEnd={handleDragEnd}
+            isDragOver={false}
           />
         ))}
       </div>
+
+      {/* Add Bid Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva Licitacion - {getStageLabel(dialogStage)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Titulo *</Label>
+              <Input
+                placeholder="Nombre de la licitacion"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Dependencia *</Label>
+              <Input
+                placeholder="Entidad contratante"
+                value={newEntity}
+                onChange={(e) => setNewEntity(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de procedimiento</Label>
+              <Select value={newType} onValueChange={(v) => setNewType(v as BidType)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="publica">Publica</SelectItem>
+                  <SelectItem value="invitacion">Invitacion a 3</SelectItem>
+                  <SelectItem value="adjudicacion_directa">Adj. Directa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Monto estimado (MXN)</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={newAmount}
+                onChange={(e) => setNewAmount(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCreateBid} disabled={!newTitle.trim() || !newEntity.trim()}>
+                Crear Licitacion
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
